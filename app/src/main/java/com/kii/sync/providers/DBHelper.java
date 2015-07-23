@@ -36,7 +36,7 @@ public class DBHelper extends SQLiteOpenHelper {
                         + "remote_pwd TEXT,"
                         + "admin_pwd TEXT,"
                         + "name TEXT,"
-                        + "color INTEGER,"
+                        + "color TEXT NOT NULL,"
                         + "model TEXT,"
                         + "brightness INTEGER,"
                         + "CT INTEGER,"

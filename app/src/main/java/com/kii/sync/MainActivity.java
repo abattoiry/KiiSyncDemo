@@ -10,6 +10,7 @@ import com.kii.cloud.storage.query.KiiQueryResult;
 import com.kii.sync.providers.SyncProvider;
 
 import android.app.Activity;
+import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.os.Bundle;
@@ -119,7 +120,8 @@ public class MainActivity extends Activity {
         if (mLights.contains(light)) {
             return;
         }
-        Cursor cursor = getContentResolver().query(SyncProvider.URI_LIGHTS, null, "MAC=(?)", new String[]{light.mac}, null);
+        Cursor cursor = getContentResolver()
+                .query(SyncProvider.URI_LIGHTS, null, "MAC=(?)", new String[]{light.mac}, null);
         if (cursor.moveToFirst()) {
             light.name = cursor.getString(cursor.getColumnIndex("name"));
             light.color = cursor.getString(cursor.getColumnIndex("model"));
@@ -128,6 +130,13 @@ public class MainActivity extends Activity {
         cursor.close();
         mLights.add(light);
         mAdapter.notifyDataSetChanged();
+    }
+
+    void addLightToDB(Light light) {
+        ContentValues values = new ContentValues();
+        values.put("MAC", light.mac);
+        values.put("color", light.color);
+        getContentResolver().insert(SyncProvider.URI_LIGHTS, values);
     }
 
     class LightsAdapter extends BaseAdapter {
