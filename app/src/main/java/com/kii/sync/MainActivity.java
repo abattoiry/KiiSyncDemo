@@ -3,6 +3,7 @@ package com.kii.sync;
 import com.kii.cloud.storage.Kii;
 import com.kii.cloud.storage.KiiBucket;
 import com.kii.cloud.storage.KiiObject;
+import com.kii.cloud.storage.KiiUser;
 import com.kii.cloud.storage.callback.KiiQueryCallBack;
 import com.kii.cloud.storage.query.KiiClause;
 import com.kii.cloud.storage.query.KiiQuery;
@@ -79,7 +80,7 @@ public class MainActivity extends Activity {
 
     void downloadLights(){
         // Prepare the target bucket to be queried
-        KiiBucket bucket = Kii.bucket("lights");
+        KiiBucket bucket = KiiUser.getCurrentUser().bucket("lights");
 
         // Define query conditions
         KiiQuery query = new KiiQuery();

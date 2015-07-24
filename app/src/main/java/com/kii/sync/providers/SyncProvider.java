@@ -88,8 +88,6 @@ public class SyncProvider extends ContentProvider {
         return true;
     }
 
-
-
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         int ret = 0;
