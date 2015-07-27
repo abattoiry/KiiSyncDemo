@@ -1,7 +1,11 @@
 package com.kii.sync;
 
+import com.kii.sync.providers.SyncProvider;
+
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.database.Cursor;
 
 /**
  * Created by yue on 14/12/24.
@@ -20,4 +24,13 @@ public class Utils {
         e.commit();
     }
 
+    public static int getLocalLightsNum(Context context){
+        ContentResolver cr = context.getContentResolver();
+        Cursor c = cr.query(SyncProvider.URI_LIGHTS,
+                null,
+                null,
+                null,
+                null);
+        return c.getCount();
+    }
 }
