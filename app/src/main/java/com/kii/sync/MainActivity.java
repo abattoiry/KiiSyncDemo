@@ -4,6 +4,8 @@ import com.kii.cloud.storage.Kii;
 import com.kii.cloud.storage.KiiBucket;
 import com.kii.cloud.storage.KiiObject;
 import com.kii.cloud.storage.KiiUser;
+import com.kii.cloud.storage.callback.KiiBucketCallBack;
+import com.kii.cloud.storage.callback.KiiObjectCallBack;
 import com.kii.cloud.storage.callback.KiiQueryCallBack;
 import com.kii.cloud.storage.query.KiiClause;
 import com.kii.cloud.storage.query.KiiQuery;
@@ -15,10 +17,12 @@ import org.json.JSONObject;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.database.Cursor;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -55,6 +59,7 @@ public class MainActivity extends Activity {
         mList = (ListView)findViewById(R.id.list);
         mAdapter = new LightsAdapter(this);
         mList.setAdapter(mAdapter);
+        fetchLocalLights();
 
 //        Light l = new Light();
 //        l.mac = "4";
@@ -81,9 +86,22 @@ public class MainActivity extends Activity {
 //        l.brightness = "13";
 //        mLights.add(l);
 
-        mAdapter.notifyDataSetChanged();
     }
 
+    void fetchLocalLights(){
+        Light light = new Light();
+        Cursor cursor = getContentResolver()
+                .query(SyncProvider.URI_LIGHTS, null, null, null, null);
+        while(cursor.moveToNext()){
+            light = new Light();
+            light.mac = cursor.getString(cursor.getColumnIndex("MAC"));
+            light.name = cursor.getString(cursor.getColumnIndex("name"));
+            light.color = cursor.getString(cursor.getColumnIndex("color"));
+            light.brightness = cursor.getString(cursor.getColumnIndex("brightness"));
+            mLights.add(light);
+        }
+        mAdapter.notifyDataSetChanged();
+    }
 
     void syncLightsFromServer(){
         // Prepare the target bucket to be queried
@@ -107,9 +125,11 @@ public class MainActivity extends Activity {
                 for (KiiObject obj : objLists) {
                     // Do something with the first 10 objects
                     Light l = new Light();
+                    l.mac = obj.getString("mac", "mac");
                     l.name = obj.getString("name");
                     l.color = obj.getString("color");
                     l.brightness = obj.getString("brightness");
+                    addLightToDB(l);
                     mLights.add(l);
                 }
 
@@ -125,20 +145,74 @@ public class MainActivity extends Activity {
     }
 
     void syncLightsFromLocal() {
-        Light light;
-        mLights.clear();
-        Cursor cursor = getContentResolver()
+
+        final Cursor cursor = getContentResolver()
                 .query(SyncProvider.URI_LIGHTS, null, null, null, null);
 
-        while(cursor.moveToNext()){
-            light = new Light();
-            light.name = cursor.getString(cursor.getColumnIndex("name"));
-            light.color = cursor.getString(cursor.getColumnIndex("color"));
-            light.brightness = cursor.getString(cursor.getColumnIndex("brightness"));
-            mLights.add(light);
+        //clear the light's bucket of the user
+        KiiBucket bucket = KiiUser.getCurrentUser().bucket("lights");
+        bucket.delete(new KiiBucketCallBack<KiiBucket>() {
+            @Override
+            public void onDeleteCompleted(int token, Exception e) {
+                if (e != null) {
+                    Log.v("BucketDelete", "delete failed: " + e.getLocalizedMessage());
+                    new uploadLightsToServer().execute(cursor);
+                    return;
+                }
+                new uploadLightsToServer().execute(cursor);
+                Log.v("BucketDelete", "delete successful");
+            }
+        });
+    }
+
+    class uploadLightsToServer extends AsyncTask<Cursor, Void, Void>{
+
+        ProgressDialog mProgressDialog = null;
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+
+            mProgressDialog = new ProgressDialog(MainActivity.this);
+            mProgressDialog.setMessage("uploading");
+            mProgressDialog.setCancelable(false);
+            mProgressDialog.show();
+
         }
-        cursor.close();
-        mAdapter.notifyDataSetChanged();
+
+        @Override
+        protected Void doInBackground(Cursor[] cursors) {
+            while(cursors[0].moveToNext()){
+                // Create an object in an application-scope bucket.
+                KiiObject object = KiiUser.getCurrentUser().bucket("lights").object();
+
+                // Set key-value pairs
+                object.set("mac", cursors[0].getString(cursors[0].getColumnIndex("MAC")));
+                object.set("name", cursors[0].getString(cursors[0].getColumnIndex("name")));
+                object.set("color", cursors[0].getString(cursors[0].getColumnIndex("color")));
+                object.set("brightness",
+                        cursors[0].getString(cursors[0].getColumnIndex("brightness")));
+
+                // Save the object
+                object.save(new KiiObjectCallBack() {
+                    @Override
+                    public void onSaveCompleted(int token, KiiObject object, Exception exception) {
+                        if (exception != null) {
+                            // Error handling
+                            return;
+                        }
+                    }
+                });
+            }
+            cursors[0].close();
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(Void result) {
+            super.onPostExecute(result);
+            mProgressDialog.dismiss();
+        }
     }
 
     void addLightToDB(Light light) {
@@ -190,6 +264,12 @@ public class MainActivity extends Activity {
         }
     }
 
+    public final static int LOCAL_SYNC = 0;
+
+    public final static int SERVER_SYNC = 1;
+
+    public static int SYNC = 0;
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
@@ -206,9 +286,12 @@ public class MainActivity extends Activity {
 
         //noinspection SimplifiableIfStatement
         if (id == R.id.action_server_sync) {
+            SYNC = SERVER_SYNC;
+            getContentResolver().delete(SyncProvider.URI_LIGHTS, null, null);
             syncLightsFromServer();
             return true;
         }else if(id == R.id.action_local_sync){
+            SYNC = LOCAL_SYNC;
             syncLightsFromLocal();
         }else if(id == R.id.action_add_light){
 
@@ -231,6 +314,7 @@ public class MainActivity extends Activity {
 
                     mLights.add(l);
                     mAdapter.notifyDataSetChanged();
+                    addLightToDB(l);
 
                 }
             }).setNegativeButton("Cancel", null);
